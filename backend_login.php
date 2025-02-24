@@ -42,16 +42,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $row = $result->fetch_assoc();
 
         if (password_verify($pwd, $row['pwd'])) {
-            $_SESSION['userEmail'] = $row['email'];
-            $_SESSION['userName'] = $row['nama'];
-            $_SESSION['userRole'] = $row['role'];
-
-            // $response["success"] = true;
-            // $response["user_email"] = $row['email']; // Kirim ke frontend
-
             echo json_encode([
                 "success" => true,
-                "message" => "Login berhasil!" . $_SESSION["userEmail"],
+                "message" => "Login berhasil!",
                 "data" => [
                     "email" => $row['email'],
                     "nama" => $row['nama'],
