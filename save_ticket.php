@@ -1,96 +1,85 @@
 <?php
-include('koneksi.php');
-// session_start();
+session_start();
+require("koneksi.php");
 
-// var_dump($_SESSION); // Untuk memeriksa semua data session
-// die();
+header('Content-Type: application/json');
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: POST");
+header("Access-Control-Allow-Headers: Content-Type");
 
-// // Memeriksa apakah user sudah login
-// if (!isset($_SESSION['login'])) {
-//     die("Error: User is not logged in.");
-// }
+$response = ["success" => false, "message" => ""];
 
-// $user_email = $_SESSION['login']; // Mengambil email dari session
-
-// Memeriksa apakah form telah disubmit
-
-// echo $_POST['temail'];
-// echo $_POST['tpwd'];
-if ($_SERVER["REQUEST_METHOD"]=="POST") {
-    // Validasi input wajib
-    $subject = $_POST['subject'];
-    $product = $_POST['product'];
-    $module = $_POST['module'];
-    $priority = $_POST['priority'];
-    $description = $_POST['description'];
-    $file_content = null; // Set default file_content to null
-
-    // Membuat id tiket unik
-    $id_tiket = 'TKT' . str_pad(rand(0, 999), 3, '0', STR_PAD_LEFT);
-
-    // Menangani file file_content
-    if (isset($_FILES['file_content']) && $_FILES['file_content']['error'] == 0) {
-        $file_name = $_FILES['file_content']['name'];
-        $file_tmp = $_FILES['file_content']['tmp_name'];
-        
-        echo $file_name;
-        // Tentukan direktori untuk menyimpan file
-        $upload_dir = $_SERVER['DOCUMENT_ROOT'].'/ts/upload/';
-        
-        // Buat direktori jika belum ada
-        if (!is_dir($upload_dir)) {
-            mkdir($upload_dir, 0777, true);
-        }
-
-        $file_path = $upload_dir . basename($file_name);
-
-        // Cek apakah file berhasil dipindahkan
-        if (move_uploaded_file($file_tmp, $file_path)) {
-            // Jika upload berhasil, simpan path file
-            $file_content = $file_path;
-        } else {
-            die("Error: Failed to move uploaded file.");
-        }
-    } else {
-        // Jika tidak ada file upload atau terjadi error
-        die("Error during file upload: " . $_FILES['file_content']['error']);
-    }
-
-    // Menyimpan data ke dalam tabel tickets
-    $sql = "INSERT INTO tickets (id_tiket, subject, product, module, priority, description, attachment, date_created, created_by)
-            VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), ?)";
-
-    // Persiapkan statement
-    $stmt = $koneksi->prepare($sql);
-
-    if ($stmt) {
-        // Ikat parameter
-        $stmt->bind_param("ssssssss", $id_tiket, $subject, $product, $module, $priority, $description, $file_content, $user_email);
-
-        // Eksekusi query
-        if ($stmt->execute()) {
-            echo "
-                <script>
-                    alert('Tiket berhasil dibuat!');
-                    document.location.href = '/ts/db_user_regis.html';
-                </script>
-            ";
-        } else {
-            echo "
-                <script>
-                    alert('Tiket gagal dibuat, isi semua field!');
-                    document.location.href = '/ts/create_tiket.html';
-                </script>
-            ";
-        }
-
-        // Tutup statement
-        $stmt->close();
-    } else {
-        echo "Error in SQL statement: " . $koneksi->error;
-    }
-
-    // Tutup koneksi
-    $koneksi->close();
+if ($_SERVER["REQUEST_METHOD"] !== "POST") {
+    $response["message"] = "Metode request tidak diizinkan.";
+    echo json_encode($response);
+    exit();
 }
+
+if (!isset($_SESSION['userEmail'])) {
+    $response["message"] = "User tidak terautentikasi.";
+    echo json_encode($response);
+    exit();
+}
+
+$input = $_POST;
+
+$required_fields = ["subject", "product", "module", "priority", "description"];
+foreach ($required_fields as $field) {
+    if (empty($input[$field])) {
+        $response["message"] = "Field $field harus diisi!";
+        echo json_encode($response);
+        exit();
+    }
+}
+
+$userEmail = $_SESSION['userEmail'];
+$created_by = $_SESSION['userName'];
+
+$subject = trim($input['subject']);
+$product = trim($input['product']);
+$module = trim($input['module']);
+$priority = trim($input['priority']);
+$description = trim($input['description']);
+$file_content = "";
+
+// File Upload Handling
+if (!empty($_FILES['file_content']['name'])) {
+    $file_name = basename($_FILES['file_content']['name']);
+    $file_tmp = $_FILES['file_content']['tmp_name'];
+    $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
+    $allowed_ext = ["jpg", "jpeg", "png"];
+    $max_size = 2 * 1024 * 1024; // 2MB
+
+    if (!in_array($file_ext, $allowed_ext) || $_FILES['file_content']['size'] > $max_size) {
+        $response["message"] = "File tidak valid atau terlalu besar (Max 2MB, JPG/PNG)!";
+        echo json_encode($response);
+        exit();
+    }
+
+    $upload_dir = _DIR_ . '/uploads/';
+    if (!is_dir($upload_dir)) mkdir($upload_dir, 0777, true);
+    $file_content = time() . "_" . uniqid() . "." . $file_ext;
+    move_uploaded_file($file_tmp, $upload_dir . $file_content);
+}
+
+// Generate ID Tiket
+$query = "SELECT id_tiket FROM tickets ORDER BY id_tiket DESC LIMIT 1";
+$result = $koneksi->query($query);
+$new_id = $result && $result->num_rows > 0 ? 'TKT' . str_pad(intval(substr($result->fetch_assoc()['id_tiket'], 3)) + 1, 3, '0', STR_PAD_LEFT) : 'TKT001';
+
+$stmt = $koneksi->prepare("INSERT INTO tickets (id_tiket, subject, product, module, priority, description, attachment, created_by, date_created) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())");
+$stmt->bind_param("ssssssss", $new_id, $subject, $product, $module, $priority, $description, $file_content, $created_by);
+
+if ($stmt->execute()) {
+    $response["success"] = true;
+    $response["message"] = "Tiket berhasil dibuat!";
+    $response["data"] = ["id_tiket" => $new_id, "subject" => $subject, "created_by" => $created_by];
+} else {
+    $response["message"] = "Gagal menyimpan tiket!";
+}
+
+$stmt->close();
+$koneksi->close();
+
+echo json_encode($response);
 ?>
