@@ -15,25 +15,7 @@ if ($_SERVER["REQUEST_METHOD"] !== "POST") {
     exit();
 }
 
-// if (!isset($_SESSION['userEmail'])) {
-//     $response["message"] = "User tidak terautentikasi.";
-//     echo json_encode($response);
-//     exit();
-// }
-
 $input = $_POST;
-
-// $required_fields = ["subject", "product", "module", "priority", "description", "attachment"];
-// foreach ($required_fields as $field) {
-//     if (empty($input[$field]) || $_FILES[$field]) {
-//         $response["message"] = "Field $field harus diisi!";
-//         echo json_encode($response);
-//         exit();
-//     }
-// }
-
-// $userEmail = $_SESSION['userEmail'];
-// $created_by = $_SESSION['userName'];
 
 $subject = trim($input['subject']);
 $product = trim($input['product']);
@@ -47,7 +29,7 @@ $file_name = $_FILES["attachment"]["name"];
 $file_tmp = $_FILES["attachment"]["tmp_name"];
 
 $file_ext = strtolower(pathinfo($file_name, PATHINFO_EXTENSION));
-$upload_dir = $_SERVER["DOCUMENT_ROOT"] . "/ts/upload/" . time() . "_" . uniqid() . "." . $file_ext;
+$upload_dir = $_SERVER["DOCUMENT_ROOT"] . "/upload/" . time() . "_" . uniqid() . "." . $file_ext;
 move_uploaded_file($file_tmp, $upload_dir);
 
 // Generate ID Tiket
